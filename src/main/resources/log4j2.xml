@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+級別: All < Trace < Debug < Info < Warn < Error < Fatal < OFF
+status: log4j 本身列印日誌的級別。可以設定成 OFF(關閉)或 Error(只輸出錯誤資訊)
+debug="false": 關閉 debug 訊息
+monitorInterval="30": 指定log4j自動重新配置的監測間隔時間，單位是s,最小是5s.
+-->
+<Configuration>
+
+    <!-- 日誌檔案目錄和壓縮檔案目錄配置 -->
+    <Properties>
+        <Property name="fileName">fileService</Property>
+        <!-- 配置日誌檔輸出目錄，此配置將日誌輸出到tomcat根目錄下的指定資料夾 -->
+        <Property name="log-path">logs/${fileName}</Property>
+        <!-- 日誌Gz起始路徑 -->
+        <Property name="logGz-path">logs/${fileName}/Gz</Property>
+        <!-- 保留日誌的天數(Y:年、 M:月、D:天) -->
+        <Property name="MaxBackupDate">60D</Property>
+        <!-- 保留日誌檔案大小 -->
+        <Property name="MaxFileSize">20MB</Property>
+        <Property name="DATE_PATTERN">yyyy-MM-dd HH:mm:ss.SSS</Property>
+        <property name="CONSOLE_PATTERN">%highlight{%d{${DATE_PATTERN}} [%t] %-5level
+            %logger{1.}:@%L -
+            %msg%n}{FATAL=Magenta, ERROR=Red, WARN=Yellow, INFO=Green, DEBUG=Cyan, TRACE=White}
+        </property>
+        <Property name="FILE_PATTERN">%d{${DATE_PATTERN}} [%t] %-5level
+            %logger{1.}:@%L -
+            %m%n$
+        </Property>
+    </Properties>
+
+    <Appenders>
+
+        <!-- 控制檯日誌的配置 -->
+        <!--idea console 不支援 ansi，disableAnsi="false"-->
+        <Console name="console" target="SYSTEM_OUT">
+            <PatternLayout pattern="${CONSOLE_PATTERN}" disableAnsi="false"/>
+        </Console>
+
+        <!-- 印出所有的資訊，每次大小超過size，則這size大小的日誌會自動存入按年份-月份建立的資料夾下面並進行壓縮，作為存檔 -->
+        <RollingFile name="infoFile"
+                                 fileName="${log-path}/${fileName}-INFO.log" immediateFlush="true"
+                                 filePattern="${logGz-path}/$${date:yyyy-MM}/${fileName}-%d{yyyy-MM-dd}-%i.web-info.gz">
+            <PatternLayout pattern="${FILE_PATTERN}"/>
+            <Policies>
+                <!-- 每天生成一個日誌文件 -->
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+                <!-- 每到MaxFileSize生成一個日誌文件 -->
+                <SizeBasedTriggeringPolicy size="${MaxFileSize}"/>
+            </Policies>
+            <Filters>
+                <!-- 只記錄info級別資訊, warn拒絕 -->
+                <ThresholdFilter level="info"/>
+                <ThresholdFilter level="warn" onMatch="DENY" onMismatch="NEUTRAL"/>
+            </Filters>
+            <!-- 設定刪除規則，max=最大保存文件数 (預設7個) -->
+            <DefaultRolloverStrategy max="30">
+                <!-- maxDepth指定掃描深度，2表示掃描basePath文件夾及其子文件夾 -->
+                <Delete basePath="${log-path}" maxDepth="2">
+                    <!-- 刪除文件名符合${fileName}-*.web-info.gz且時間超過MaxBackupDate的文件 -->
+                    <IfFileName glob="*/${fileName}-*.web-info.gz"/>
+                    <IfLastModified age="${MaxBackupDate}"/>
+                </Delete>
+            </DefaultRolloverStrategy>
+        </RollingFile>
+
+        <!-- 儲存所有error資訊 -->
+        <RollingFile name="errorFile"
+                                 fileName="${log-path}/${fileName}-ERROR.log" immediateFlush="true"
+                                 filePattern="${logGz-path}/$${date:yyyy-MM}/${fileName}-%d{yyyy-MM-dd}-%i.web-error.gz">
+            <PatternLayout pattern="${FILE_PATTERN}"/>
+            <Policies>
+                <!-- 每天生成一個日誌文件 -->
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+                <!-- 每到MaxFileSize生成一個日誌文件 -->
+                <SizeBasedTriggeringPolicy size="${MaxFileSize}"/>
+            </Policies>
+            <Filters>
+                <!-- 只記錄error以下級別資訊 -->
+                <ThresholdFilter level="error"/>
+            </Filters>
+            <!-- 設定刪除規則，max=最大保存文件数 (預設7個) -->
+            <DefaultRolloverStrategy max="30">
+                <!-- maxDepth指定掃描深度，2表示掃描basePath文件夾及其子文件夾 -->
+                <Delete basePath="${log-path}" maxDepth="2">
+                    <!-- 刪除文件名符合${fileName}-*.web-error.gz且時間超過MaxBackupDate的文件 -->
+                    <IfFileName glob="*/${fileName}-*.web-error.gz"/>
+                    <IfLastModified age="${MaxBackupDate}"/>
+                </Delete>
+            </DefaultRolloverStrategy>
+        </RollingFile>
+    </Appenders>
+
+    <!--定義logger，只有定義logger引入appender，appender才會生效-->
+    <Loggers>
+        <!-- 印出 hibernate debug 的資訊 -->
+        <!--<Logger name="org.hibernate.SQL" level="debug" additivity="false">-->
+        <!--<AppenderRef ref="console"/>-->
+        <!--&lt;!&ndash;<AppenderRef ref="sqlFile"/>&ndash;&gt;-->
+        <!--</Logger>-->
+        <!-- AsyncRoot 非同步記錄全部日誌 - 需要 LMAX Disruptor 支援 -->
+        <!-- 印出設置級別以上的日誌至 AppenderRef -->
+        <AsyncRoot level="info" additivity="false">
+            <AppenderRef ref="console"/>
+            <AppenderRef ref="infoFile"/>
+            <AppenderRef ref="errorFile"/>
+        </AsyncRoot>
+    </Loggers>
+
+</Configuration>
